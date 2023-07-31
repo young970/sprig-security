@@ -14,7 +14,7 @@ public class WebSecurityConfigure {
   @Bean
   public WebSecurityCustomizer webSecurityCustomizer() {
     return (web) -> web.ignoring()
-            .requestMatchers("assects/**");
+            .requestMatchers("/assects/**");
   }
 
   @Bean
