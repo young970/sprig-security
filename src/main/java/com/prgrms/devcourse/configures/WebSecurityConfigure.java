@@ -40,7 +40,11 @@ public class WebSecurityConfigure {
             .and()
             .rememberMe()
             .rememberMeParameter("remember-me")
-            .tokenValiditySeconds(300);
+            .tokenValiditySeconds(300)
+            .and()
+            .requiresChannel()
+            .anyRequest()
+            .requiresSecure();
 
     return http.build();
 
