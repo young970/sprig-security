@@ -1,6 +1,5 @@
 <!DOCTYPE html>
-<html lang="ko" xmlns:th="http://www.thymeleaf.org"
-      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
 <head>
   <meta charset="UTF-8"/>
   <meta content="no-cache"/>
@@ -9,8 +8,5 @@
 </head>
 <body>
 index page
-<div sec:authorize="hasRole('ROLE_USER')">
-  권한: USER
-</div>
 </body>
 </html>
