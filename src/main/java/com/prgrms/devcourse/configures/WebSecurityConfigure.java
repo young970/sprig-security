@@ -19,7 +19,6 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
-import org.springframework.security.web.access.expression.WebExpressionAuthorizationManager;
 import org.springframework.security.web.access.expression.WebExpressionVoter;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
@@ -31,6 +30,10 @@ import java.util.List;
 public class WebSecurityConfigure {
 
   private final Logger log = LoggerFactory.getLogger(getClass());
+
+  public WebSecurityConfigure() {
+    SecurityContextHolder.setStrategyName(SecurityContextHolder.MODE_INHERITABLETHREADLOCAL);
+  }
 
   //스프링 시큐리티 필터 채인을 태우지 않겠다는 의미
   // 불필요한 서버 자원 낭비를 방지
@@ -62,7 +65,9 @@ public class WebSecurityConfigure {
 //                    .usernameParameter("my-username")
 //                    .passwordParameter("my-password")
                     .permitAll())
+            .httpBasic()
 
+            .and()
             .logout()
             .logoutRequestMatcher(new AntPathRequestMatcher("/logout"))
             .logoutSuccessUrl("/")
