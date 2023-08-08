@@ -9,6 +9,7 @@ import org.springframework.security.access.hierarchicalroles.RoleHierarchy;
 import org.springframework.security.access.hierarchicalroles.RoleHierarchyImpl;
 import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.authorization.AuthorizationManager;
+import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
@@ -16,13 +17,15 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.jdbc.JdbcDaoImpl;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 
-
+import javax.sql.DataSource;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
@@ -38,6 +41,12 @@ public class WebSecurityConfigure {
 
   private final Logger log = LoggerFactory.getLogger(getClass());
 
+  private final DataSource dataSource;
+
+  public WebSecurityConfigure(DataSource dataSource) {
+    this.dataSource = dataSource;
+  }
+
   @Bean
   WebSecurityCustomizer webSecurityCustomizer() {
     return (web) -> web.ignoring().requestMatchers(antMatcher("/assets/**"), antMatcher("/h2-console/**"));
@@ -48,12 +57,12 @@ public class WebSecurityConfigure {
     return new BCryptPasswordEncoder();
   }
 
-    /*@Bean
-    UserDetailsService userDetailsService(DataSource dataSource) {
-        var jdbcDao = new JdbcDaoImpl();
-        jdbcDao.setDataSource(dataSource);
-        return jdbcDao;
-    }*/
+//  @Bean
+//  UserDetailsService userDetailsService(DataSource dataSource) {
+//    JdbcDaoImpl jdbcDao = new JdbcDaoImpl();
+//    jdbcDao.setDataSource(dataSource);
+//    return jdbcDao;
+//  }
 
   @Bean
   SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -72,6 +81,30 @@ public class WebSecurityConfigure {
 //                .withUser("admin1").password("{noop}1234").roles("ADMIN")
 //                .and()
 //                .withUser("admin2").password("{noop}1234").roles("ADMIN");
+
+    AuthenticationManagerBuilder auth = http.getSharedObject(AuthenticationManagerBuilder.class);
+    auth.jdbcAuthentication()
+            .dataSource(dataSource)
+            .usersByUsernameQuery(
+                    "SELECT " +
+                            "login_id, passwd, true " +
+                            "FROM " +
+                            "users " +
+                            "WHERE " +
+                            "login_id = ?"
+            )
+            .groupAuthoritiesByUsername(
+                    "SELECT " +
+                            "u.login_id, g.name, p.name " +
+                            "FROM " +
+                            "users u JOIN groups g ON u.group_id = g.id " +
+                            "LEFT JOIN group_permission gp ON g.id = gp.group_id " +
+                            "JOIN permissions p ON p.id = gp.permission_id " +
+                            "WHERE " +
+                            "u.login_id = ?"
+            )
+            .getUserDetailsService().setEnableAuthorities(false)
+    ;
 
     http
             /**
