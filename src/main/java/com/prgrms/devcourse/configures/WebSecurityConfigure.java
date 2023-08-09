@@ -1,8 +1,10 @@
 package com.prgrms.devcourse.configures;
 
+import com.prgrms.devcourse.user.UserService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.access.hierarchicalroles.RoleHierarchy;
@@ -41,10 +43,11 @@ public class WebSecurityConfigure {
 
   private final Logger log = LoggerFactory.getLogger(getClass());
 
-  private final DataSource dataSource;
+  private UserService userService;
 
-  public WebSecurityConfigure(DataSource dataSource) {
-    this.dataSource = dataSource;
+  @Autowired
+  public void setUserService(UserService userService) {
+    this.userService = userService;
   }
 
   @Bean
@@ -57,54 +60,12 @@ public class WebSecurityConfigure {
     return new BCryptPasswordEncoder();
   }
 
-//  @Bean
-//  UserDetailsService userDetailsService(DataSource dataSource) {
-//    JdbcDaoImpl jdbcDao = new JdbcDaoImpl();
-//    jdbcDao.setDataSource(dataSource);
-//    return jdbcDao;
-//  }
 
   @Bean
   SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 
-    /**
-     * spring security user 추가
-     */
-
-//    AuthenticationManagerBuilder auth = http.getSharedObject(AuthenticationManagerBuilder.class);
-//    auth.userDetailsService(userService);
-
-//        AuthenticationManagerBuilder auth = http.getSharedObject(AuthenticationManagerBuilder.class);
-//        auth.inMemoryAuthentication().
-//                withUser("user").password("{noop}1234").roles("USER")
-//                .and()
-//                .withUser("admin1").password("{noop}1234").roles("ADMIN")
-//                .and()
-//                .withUser("admin2").password("{noop}1234").roles("ADMIN");
-
     AuthenticationManagerBuilder auth = http.getSharedObject(AuthenticationManagerBuilder.class);
-    auth.jdbcAuthentication()
-            .dataSource(dataSource)
-            .usersByUsernameQuery(
-                    "SELECT " +
-                            "login_id, passwd, true " +
-                            "FROM " +
-                            "users " +
-                            "WHERE " +
-                            "login_id = ?"
-            )
-            .groupAuthoritiesByUsername(
-                    "SELECT " +
-                            "u.login_id, g.name, p.name " +
-                            "FROM " +
-                            "users u JOIN groups g ON u.group_id = g.id " +
-                            "LEFT JOIN group_permission gp ON g.id = gp.group_id " +
-                            "JOIN permissions p ON p.id = gp.permission_id " +
-                            "WHERE " +
-                            "u.login_id = ?"
-            )
-            .getUserDetailsService().setEnableAuthorities(false)
-    ;
+    auth.userDetailsService(userService);
 
     http
             /**
@@ -114,7 +75,7 @@ public class WebSecurityConfigure {
                     .requestMatchers(antMatcher("/assets/**"), antMatcher("/h2-console/**"))
                     .permitAll()
                     .requestMatchers(antMatcher("/me")).access(new HierarchyBasedAuthorizationManager(roleHierarchy()))//hasAnyRole("USER", "ADMIN")
-                    .requestMatchers(antMatcher("/admin")).access(allOf(hasRole("ADMIN"), fullyAuthenticated(), new CustomAuthorizationManager()))
+                    .requestMatchers(antMatcher("/admin")).access(allOf(hasRole("ADMIN"), fullyAuthenticated() /*, new CustomAuthorizationManager() */))
                     .anyRequest().permitAll())
             /**
              * 로그인 추가
