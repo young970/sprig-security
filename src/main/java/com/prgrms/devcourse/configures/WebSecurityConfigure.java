@@ -1,5 +1,6 @@
 package com.prgrms.devcourse.configures;
 
+import com.prgrms.devcourse.jwt.Jwt;
 import com.prgrms.devcourse.user.UserService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
@@ -43,7 +44,14 @@ public class WebSecurityConfigure {
 
   private final Logger log = LoggerFactory.getLogger(getClass());
 
+  private JwtConfigure jwtConfigure;
+
   private UserService userService;
+
+  @Autowired
+  public void setJwtConfigure(JwtConfigure jwtConfigure) {
+    this.jwtConfigure = jwtConfigure;
+  }
 
   @Autowired
   public void setUserService(UserService userService) {
@@ -53,6 +61,15 @@ public class WebSecurityConfigure {
   @Bean
   WebSecurityCustomizer webSecurityCustomizer() {
     return (web) -> web.ignoring().requestMatchers(antMatcher("/assets/**"), antMatcher("/h2-console/**"));
+  }
+
+  @Bean
+  public Jwt jwt() {
+    return new Jwt(
+            jwtConfigure.getIssuer(),
+            jwtConfigure.getClientSecret(),
+            jwtConfigure.getExpirySeconds()
+    );
   }
 
   @Bean
@@ -74,42 +91,27 @@ public class WebSecurityConfigure {
             .authorizeHttpRequests((authorize) -> authorize
                     .requestMatchers(antMatcher("/assets/**"), antMatcher("/h2-console/**"))
                     .permitAll()
-                    .requestMatchers(antMatcher("/me")).access(new HierarchyBasedAuthorizationManager(roleHierarchy()))//hasAnyRole("USER", "ADMIN")
-                    .requestMatchers(antMatcher("/admin")).access(allOf(hasRole("ADMIN"), fullyAuthenticated() /*, new CustomAuthorizationManager() */))
+                    .requestMatchers(antMatcher("/api/user/me")).access(allOf(hasRole("USER"),hasRole("ADMIN"))) //hasAnyRole("USER", "ADMIN")
                     .anyRequest().permitAll())
+            .csrf()
+            .disable()
+            .headers()
+            .disable()
             /**
              * 로그인 추가
              */
-            .formLogin((formLogin) -> formLogin
-                    .defaultSuccessUrl("/")
-                    .usernameParameter("username")
-                    .passwordParameter("password")//html 로그인 페이지에 username, pawssword에 해당하는 파라미터 값(아이디랑 비밀번호)
-                    .permitAll()
-            )
+            .formLogin()
+            .disable()
             /**
              * 로그아웃 추가
              */
-            .logout((logout) -> logout
-                    .logoutUrl("/logout")
-                    .logoutSuccessUrl("/")
-                    .invalidateHttpSession(true)
-                    .clearAuthentication(true)
-                    .deleteCookies("remember-me")
-            )
+            .logout()
+            .disable()
             /**
              * 아이디 비번 쿠키 기반 기억하기
              */
-            .rememberMe((rememberMe) -> rememberMe
-                    .key("my-remember-me")
-                    .rememberMeParameter("remember-me")//html 로그인 페이지에 name에 해당하는 파라미터 값
-                    .tokenValiditySeconds(300))// 쿠키 기반
-            /**
-             * http 요청을 https로 리다이렉트
-             * ChannelProcessingFilter
-             */
-            .requiresChannel((requiresChannel) -> requiresChannel
-                    .anyRequest().requiresSecure()
-            )
+            .rememberMe()// 쿠키 기반
+            .disable()
             /**
              * 익명 사용자 추가
              * AnonymousAuthenticationFilter
@@ -122,11 +124,7 @@ public class WebSecurityConfigure {
                     .accessDeniedHandler(accessDeniedHandler())
             )
             .sessionManagement((sessionManagement -> sessionManagement
-                    .sessionFixation().changeSessionId()
-                    .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
-                    .invalidSessionUrl("/")
-                    .maximumSessions(1)
-                    .maxSessionsPreventsLogin(false)
+                    .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             ));
     return http.build();
   }// 이것도 마찬가지로 변경 됏음. 과거 사용했던 메소드 밑에 현재 버전에 맞는 메소드가 있음.
