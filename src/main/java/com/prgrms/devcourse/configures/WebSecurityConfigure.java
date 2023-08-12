@@ -3,6 +3,7 @@ package com.prgrms.devcourse.configures;
 import com.prgrms.devcourse.jwt.Jwt;
 import com.prgrms.devcourse.jwt.JwtAuthenticationFilter;
 import com.prgrms.devcourse.jwt.JwtAuthenticationProvider;
+import com.prgrms.devcourse.jwt.JwtSecurityContextRepository;
 import com.prgrms.devcourse.user.UserService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
@@ -28,6 +29,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 import org.springframework.security.web.context.SecurityContextPersistenceFilter;
+import org.springframework.security.web.context.SecurityContextRepository;
 
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
@@ -85,6 +87,11 @@ public class WebSecurityConfigure {
     return new JwtAuthenticationFilter(jwtConfigure.getHeader(), jwt());
   }
 
+  public SecurityContextRepository securityContextRepository() {
+    Jwt jwt = jwt();
+    return new JwtSecurityContextRepository(jwtConfigure.getHeader(), jwt);
+  }
+
   @Bean
   SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
     http
@@ -129,6 +136,11 @@ public class WebSecurityConfigure {
             .sessionManagement((sessionManagement -> sessionManagement
                     .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             ))
+
+            .securityContext()
+            .securityContextRepository(securityContextRepository())
+            .and()
+
             .addFilterAfter(jwtAuthenticationFilter(), SecurityContextPersistenceFilter.class);
     return http.build();
   }// 이것도 마찬가지로 변경 됏음. 과거 사용했던 메소드 밑에 현재 버전에 맞는 메소드가 있음.

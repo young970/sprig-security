@@ -60,7 +60,7 @@ public class JwtAuthenticationFilter extends GenericFilterBean {
                   log.debug("Jwt parsed: {}", claims);
                   String username = claims.username;
                   List<GrantedAuthority> authorities = getAuthorities(claims);
-                  var authentication = new JwtAuthenticationToken(new JwtAuthentication(token, username),
+                  JwtAuthenticationToken authentication = new JwtAuthenticationToken(new JwtAuthentication(token, username),
                           null,
                           authorities
                   );
