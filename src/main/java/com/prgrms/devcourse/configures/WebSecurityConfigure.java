@@ -1,15 +1,17 @@
 package com.prgrms.devcourse.configures;
 
 import com.prgrms.devcourse.jwt.Jwt;
+import com.prgrms.devcourse.jwt.JwtAuthenticationFilter;
+import com.prgrms.devcourse.jwt.JwtAuthenticationProvider;
 import com.prgrms.devcourse.user.UserService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.access.hierarchicalroles.RoleHierarchy;
 import org.springframework.security.access.hierarchicalroles.RoleHierarchyImpl;
+import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
@@ -20,19 +22,16 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.User;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.core.userdetails.jdbc.JdbcDaoImpl;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
+import org.springframework.security.web.context.SecurityContextPersistenceFilter;
 
-import javax.sql.DataSource;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
-import static org.springframework.security.authorization.AuthenticatedAuthorizationManager.fullyAuthenticated;
 import static org.springframework.security.authorization.AuthorityAuthorizationManager.hasRole;
 import static org.springframework.security.authorization.AuthorizationManagers.allOf;
 import static org.springframework.security.web.util.matcher.AntPathRequestMatcher.antMatcher;
@@ -44,18 +43,10 @@ public class WebSecurityConfigure {
 
   private final Logger log = LoggerFactory.getLogger(getClass());
 
-  private JwtConfigure jwtConfigure;
+  private final JwtConfigure jwtConfigure;
 
-  private UserService userService;
-
-  @Autowired
-  public void setJwtConfigure(JwtConfigure jwtConfigure) {
+  public WebSecurityConfigure(JwtConfigure jwtConfigure) {
     this.jwtConfigure = jwtConfigure;
-  }
-
-  @Autowired
-  public void setUserService(UserService userService) {
-    this.userService = userService;
   }
 
   @Bean
@@ -77,13 +68,25 @@ public class WebSecurityConfigure {
     return new BCryptPasswordEncoder();
   }
 
+  @Bean
+  public JwtAuthenticationProvider jwtAuthenticationProvider(UserService userService, Jwt jwt) {
+    return new JwtAuthenticationProvider(jwt, userService);
+  }
+
+  @Bean
+  public AuthenticationManager authenticationManager(HttpSecurity http, UserService userService) throws Exception {
+    AuthenticationManagerBuilder authenticationManagerBuilder =
+            http.getSharedObject(AuthenticationManagerBuilder.class);
+    authenticationManagerBuilder.authenticationProvider(jwtAuthenticationProvider(userService, jwt()));
+    return authenticationManagerBuilder.build();
+  }
+
+  public JwtAuthenticationFilter jwtAuthenticationFilter() {
+    return new JwtAuthenticationFilter(jwtConfigure.getHeader(), jwt());
+  }
 
   @Bean
   SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-
-    AuthenticationManagerBuilder auth = http.getSharedObject(AuthenticationManagerBuilder.class);
-    auth.userDetailsService(userService);
-
     http
             /**
              * 권한 추가
@@ -125,7 +128,8 @@ public class WebSecurityConfigure {
             )
             .sessionManagement((sessionManagement -> sessionManagement
                     .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-            ));
+            ))
+            .addFilterAfter(jwtAuthenticationFilter(), SecurityContextPersistenceFilter.class);
     return http.build();
   }// 이것도 마찬가지로 변경 됏음. 과거 사용했던 메소드 밑에 현재 버전에 맞는 메소드가 있음.
 
