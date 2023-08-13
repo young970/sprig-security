@@ -2,20 +2,20 @@ package com.prgrms.devcourse.configures;
 
 import com.prgrms.devcourse.jwt.Jwt;
 import com.prgrms.devcourse.jwt.JwtAuthenticationFilter;
-import com.prgrms.devcourse.jwt.JwtAuthenticationProvider;
-import com.prgrms.devcourse.jwt.JwtSecurityContextRepository;
+import com.prgrms.devcourse.oauth2.HttpCookieOAuth2AuthorizationRequestRepository;
+import com.prgrms.devcourse.oauth2.OAuth2AuthenticationSuccessHandler;
 import com.prgrms.devcourse.user.UserService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.security.access.hierarchicalroles.RoleHierarchy;
 import org.springframework.security.access.hierarchicalroles.RoleHierarchyImpl;
-import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.authorization.AuthorizationManager;
-import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
@@ -23,13 +23,15 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.User;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.client.JdbcOAuth2AuthorizedClientService;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClientService;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.AuthenticatedPrincipalOAuth2AuthorizedClientRepository;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizedClientRepository;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 import org.springframework.security.web.context.SecurityContextPersistenceFilter;
-import org.springframework.security.web.context.SecurityContextRepository;
 
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
@@ -65,35 +67,37 @@ public class WebSecurityConfigure {
     );
   }
 
-  @Bean
-  public PasswordEncoder passwordEncoder() {
-    return new BCryptPasswordEncoder();
-  }
-
-  @Bean
-  public JwtAuthenticationProvider jwtAuthenticationProvider(UserService userService, Jwt jwt) {
-    return new JwtAuthenticationProvider(jwt, userService);
-  }
-
-  @Bean
-  public AuthenticationManager authenticationManager(HttpSecurity http, UserService userService) throws Exception {
-    AuthenticationManagerBuilder authenticationManagerBuilder =
-            http.getSharedObject(AuthenticationManagerBuilder.class);
-    authenticationManagerBuilder.authenticationProvider(jwtAuthenticationProvider(userService, jwt()));
-    return authenticationManagerBuilder.build();
-  }
-
   public JwtAuthenticationFilter jwtAuthenticationFilter() {
     return new JwtAuthenticationFilter(jwtConfigure.getHeader(), jwt());
   }
 
-  public SecurityContextRepository securityContextRepository() {
-    Jwt jwt = jwt();
-    return new JwtSecurityContextRepository(jwtConfigure.getHeader(), jwt);
+  @Bean
+  public OAuth2AuthorizedClientService authorizedClientService(
+          JdbcOperations jdbcOperations,
+          ClientRegistrationRepository clientRegistrationRepository
+  ) {
+    return new JdbcOAuth2AuthorizedClientService(jdbcOperations, clientRegistrationRepository);
+  }
+
+  @Bean
+  public OAuth2AuthorizedClientRepository authorizedClientRepository(OAuth2AuthorizedClientService authorizedClientService) {
+    return new AuthenticatedPrincipalOAuth2AuthorizedClientRepository(authorizedClientService);
+  }
+
+  @Bean
+  HttpCookieOAuth2AuthorizationRequestRepository httpCookieOAuth2AuthorizationRequestRepository() {
+    return new HttpCookieOAuth2AuthorizationRequestRepository();
+  }
+
+  @Bean
+  public OAuth2AuthenticationSuccessHandler oauth2AuthenticationSuccessHandler(Jwt jwt, UserService userService) {
+    return new OAuth2AuthenticationSuccessHandler(jwt, userService);
   }
 
   @Bean
   SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    ApplicationContext context = http.getSharedObject(ApplicationContext.class);
+
     http
             /**
              * 권한 추가
@@ -137,9 +141,13 @@ public class WebSecurityConfigure {
                     .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             ))
 
-            .securityContext()
-            .securityContextRepository(securityContextRepository())
-            .and()
+            .oauth2Login((oauth2Login) -> oauth2Login
+                    .authorizationEndpoint((authorizationEndpoint) -> authorizationEndpoint
+                            .authorizationRequestRepository(httpCookieOAuth2AuthorizationRequestRepository())
+                    )
+                    .successHandler(oauth2AuthenticationSuccessHandler(jwt(), context.getBean(UserService.class)))
+                    .authorizedClientRepository(context.getBean(AuthenticatedPrincipalOAuth2AuthorizedClientRepository.class))
+            )
 
             .addFilterAfter(jwtAuthenticationFilter(), SecurityContextPersistenceFilter.class);
     return http.build();
